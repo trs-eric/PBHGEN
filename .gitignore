@@ -7,3 +7,8 @@
 
 **/project.cfg
 **/*.pb.cfg
+
+# Local agent instructions intentionally remain specific to each checkout.
+# Public contribution and repository policy belongs in README.md or another
+# tracked project document.
+/AGENTS.md
