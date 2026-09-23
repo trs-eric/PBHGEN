@@ -8,8 +8,11 @@
 ;==============================================================================
 
 CompilerIf #PB_Compiler_Module = ""
+Declare.s TrimStatement(Line$)
+Declare IsProcedureSignatureComplete(Line$)
 Declare ExplodeStringArray(Array a$(1), s$, delimeter$)
 Declare ExplodeCodeLine(Array Results$(1), Code$)
+Declare.s CollectProcedureSignature(StartIndex.i, *LastIndex)
 Declare.s FilterArguments(Line$)
 Declare WriteHeader(Str$)
 Declare IsComment(Line$)

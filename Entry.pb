@@ -36,6 +36,46 @@ EndEnumeration
 Program\CurrentLineNumber = 0
 Program\CurrentState = #PBHGEN_STATE_GLOBAL
 
+; -----------------------------------------------------------------------------
+; Removes horizontal whitespace from both ends of a logical statement.
+; -----------------------------------------------------------------------------
+Procedure.s TrimStatement(Line$)
+  While Len(Line$) > 0 And (Left(Line$, 1) = " " Or Left(Line$, 1) = Chr(9))
+    Line$ = Mid(Line$, 2)
+  Wend
+  While Len(Line$) > 0 And (Right(Line$, 1) = " " Or Right(Line$, 1) = Chr(9))
+    Line$ = Left(Line$, Len(Line$) - 1)
+  Wend
+  ProcedureReturn Line$
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Returns true when a procedure's outer argument list is balanced.
+; -----------------------------------------------------------------------------
+Procedure IsProcedureSignatureComplete(Line$)
+  Protected Index.i, Depth.i, Started.i, InString.i
+  Protected Character$
+  For Index = 1 To Len(Line$)
+    Character$ = Mid(Line$, Index, 1)
+    If Character$ = #DQUOTE$
+      InString = Bool(Not InString)
+    ElseIf Not InString
+      If Character$ = ";"
+        Break
+      ElseIf Character$ = "("
+        Depth + 1
+        Started = #True
+      ElseIf Character$ = ")"
+        Depth - 1
+        If Started And Depth = 0
+          ProcedureReturn #True
+        EndIf
+      EndIf
+    EndIf
+  Next
+  ProcedureReturn #False
+EndProcedure
+
 #PBHGEN_VERSION$ = "5.73"
 
 
@@ -96,10 +136,29 @@ Procedure ExplodeCodeLine(Array Results$(1), Code$)
   ProcedureReturn Results
 EndProcedure
 
-; Whenever the line ends with a comma you will want to do this.
-Global ContinueNextLine.a = #False
 Global Dim CodeLines$(0)
 Global CodeLinesCount.l = 0
+
+; -----------------------------------------------------------------------------
+; Joins logical statements until the complete procedure signature is present.
+; -----------------------------------------------------------------------------
+Procedure.s CollectProcedureSignature(StartIndex.i, *LastIndex)
+  Protected *ResultIndex.Integer = *LastIndex
+  Protected Index.i = StartIndex
+  Protected Signature$ = TrimStatement(CodeLines$(Index))
+  Protected NextStatement$
+  While Not IsProcedureSignatureComplete(Signature$) And Index + 1 < CodeLinesCount
+    Index + 1
+    NextStatement$ = TrimStatement(CodeLines$(Index))
+    If Right(Signature$, 1) = "," Or Left(NextStatement$, 1) = ")"
+      Signature$ + NextStatement$
+    Else
+      Signature$ + " " + NextStatement$
+    EndIf
+  Wend
+  *ResultIndex\i = Index
+  ProcedureReturn Signature$
+EndProcedure
 
 Procedure.s FilterArguments(Line$)
   NewL$ = ""
@@ -110,11 +169,6 @@ Procedure.s FilterArguments(Line$)
   
   CheckDefaultType.c = #False
   FindDefaultType$ = ""
-  
-  ; Maybe this is line continuation
-  If ContinueNextLine = #True
-    IsInArguments = #True
-  EndIf
   
   ; For each character in the line
   For i=1 To Len(Line$)
@@ -214,17 +268,6 @@ Procedure.s FilterArguments(Line$)
     EndIf
     
   Next
-  
-  If NextChar = ","
-    ContinueNextLine = #True
-  Else
-    ContinueNextLine = #False
-  EndIf
-  
-  If ContinueNextLine
-    Program\CurrentLineNumber +1
-    NewL$ + FilterArguments(CodeLines$(Program\CurrentLineNumber))
-  EndIf
   
   ProcedureReturn NewL$
 EndProcedure
@@ -511,7 +554,7 @@ If Program\SourceFileHandle And Program\HeaderFileHandle
     For i = 0 To ArraySize(CodeChunks$())
       ; Add line to collection:
       ReDim CodeLines$(CodeLinesCount)
-      CodeLines$(CodeLinesCount) = Trim(CodeChunks$(i)) ; Trim whitespace from beginning / end of line.
+      CodeLines$(CodeLinesCount) = TrimStatement(CodeChunks$(i)) ; Trim horizontal whitespace from beginning / end of line.
       
       ; Remove "Runtime" keyword as it's not important.
       If LCase(Left(CodeLines$(CodeLinesCount), 8)) = "runtime "
@@ -532,8 +575,14 @@ If Program\SourceFileHandle And Program\HeaderFileHandle
   
   CloseFile(Program\SourceFileHandle)
   
-  For i = 0 To CodeLinesCount -1
-    ParseLine(CodeLines$(i))
+  Define ParseIndex.i, LastLineIndex.i
+  For ParseIndex = 0 To CodeLinesCount -1
+    Program\CurrentLine$ = CodeLines$(ParseIndex)
+    If IsBeginProcedure(Program\CurrentLine$)
+      Program\CurrentLine$ = CollectProcedureSignature(ParseIndex, @LastLineIndex)
+      ParseIndex = LastLineIndex
+    EndIf
+    ParseLine(Program\CurrentLine$)
   Next
   
   WriteHeader("CompilerEndIf")
