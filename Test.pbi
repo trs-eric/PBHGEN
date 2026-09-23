@@ -10,7 +10,7 @@
 CompilerIf #PB_Compiler_Module = ""
 Declare NormalEmptyProcedure()
 Declare WithOptionalArguments(heh.l, Something$="Procedure WithOptionalArguments(Something$)" + "lol")
-DeclareC StructureThing(*Hello, *Okay)
+DeclareC StructureThing(*Hello.SYSTEM_INFO, *Okay.SYSTEM_ALARM_ACE)
 Declare ArrayThing(Array HelloWorld(1))
 Declare BracketStuff(String$ = "heh" + Chr(50), Okay.l = 50)
 CompilerEndIf
@@ -36,5 +36,5 @@ CompilerIf #PB_Compiler_Module = "TestB"
 Declare FuncHurrDurr(Cheese$ = "I love::sandwhiche~")
 CompilerEndIf
 CompilerIf #PB_Compiler_Module = ""
-Declare OnVstMain(*Effect)
+Declare OnVstMain(*Effect.TestB::AEffect)
 CompilerEndIf

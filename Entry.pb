@@ -200,10 +200,6 @@ Procedure.s FilterArguments(Line$)
         CheckDefaultType = #True
       EndIf
       
-      If Not IsInString And NextChar = "*"
-        IsAtUnwanted = #True
-      EndIf
-      
       If Not IsInString And NextChar = "." And IsAtUnwanted
         Skipping = #True
       EndIf

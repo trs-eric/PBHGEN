@@ -41,6 +41,8 @@ At the moment if you wish to have a procedure with structured List/Array/Map arg
 
 Procedure declarations may be indented with spaces or tabs. Multiline signatures are supported, including signatures with more than six parameters and default expressions containing nested parentheses.
 
+Typed pointer parameters retain their structure suffixes, including module-qualified structure names.
+
 ### Motivation
 
 PureBasic is a great language but I was always annoyed about the fact I could never choose where I would locate my Procedures, if I wished to use a Procedure somewhere I would have to move it above of the Procedure that was going to call it, the Declare statement allows to tell the compiler specific Procedures are going to exist and to find them but writing them over and over, fixing arguments is not only a pain but makes your source look like a mess. That’s the reason I required an automatic header generator for PureBasic. I hope you too will enjoy the new freedom thanks to this little tool!
