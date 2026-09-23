@@ -11,8 +11,8 @@
 Structure ProgramData
   SourceFileName$         ; the name of the source file being read.
   HeaderFileName$         ; the name of the header file being written.
-  SourceFileHandle.l      ; the file read handle of the source file.
-  HeaderFileHandle.l      ; the file write handle of the header file.
+  SourceFileHandle.i      ; the file read handle of the source file.
+  HeaderFileHandle.i      ; the file write handle of the header file.
   
   CurrentLineNumber.l     ; the line number of the line currently parsing.
   CurrentLine$            ; the line text currently being parsed.
