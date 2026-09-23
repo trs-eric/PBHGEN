@@ -154,7 +154,7 @@ EndProcedure
 
 Procedure IsProcedureSignatureComplete(Line$)
   Protected Index.i, Depth.i, Started.i, InString.i
-  Protected Character$ 
+  Protected Character$
   For Index = 1 To Len(Line$)
     Character$ = Mid(Line$, Index, 1)
     If Character$ = #DQUOTE$
