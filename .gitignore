@@ -15,3 +15,6 @@
 
 # Local development backlog; public work is documented in releases and commits.
 /TODO.md
+
+# Local PowerShell test runners are maintained outside the public history.
+/tests/*.ps1
