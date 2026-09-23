@@ -23,6 +23,14 @@ Procedure ArrayThing(Array HelloWorld.SYSTEM_INFO(1))
   
 EndProcedure
 
+Procedure ListThing(List HelloWorld.SYSTEM_INFO())
+
+EndProcedure
+
+Procedure MapThing(Map HelloWorld.SYSTEM_INFO())
+
+EndProcedure
+
 Procedure BracketStuff(String$ = "heh" + Chr(50), Okay.l = 50)
   
 EndProcedure

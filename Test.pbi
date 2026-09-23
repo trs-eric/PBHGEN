@@ -12,6 +12,8 @@ Declare NormalEmptyProcedure()
 Declare WithOptionalArguments(heh.l, Something$="Procedure WithOptionalArguments(Something$)" + "lol")
 DeclareC StructureThing(*Hello.SYSTEM_INFO, *Okay.SYSTEM_ALARM_ACE)
 Declare ArrayThing(Array HelloWorld(1))
+Declare ListThing(List HelloWorld())
+Declare MapThing(Map HelloWorld())
 Declare BracketStuff(String$ = "heh" + Chr(50), Okay.l = 50)
 CompilerEndIf
 CompilerIf #PB_Compiler_Module = "EmptyModuleWithoutProcedures"
