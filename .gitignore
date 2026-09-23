@@ -12,3 +12,6 @@
 # Public contribution and repository policy belongs in README.md or another
 # tracked project document.
 /AGENTS.md
+
+# Local development backlog; public work is documented in releases and commits.
+/TODO.md
