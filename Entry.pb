@@ -50,15 +50,36 @@ Procedure.s TrimStatement(Line$)
 EndProcedure
 
 ; -----------------------------------------------------------------------------
+; Returns true when a quote is preceded by an odd number of backslashes.
+; -----------------------------------------------------------------------------
+Procedure IsQuoteEscaped(Line$, QuoteIndex.i)
+  Protected Index.i = QuoteIndex - 1
+  Protected BackslashCount.i
+  While Index > 0 And Mid(Line$, Index, 1) = Chr(92)
+    BackslashCount + 1
+    Index - 1
+  Wend
+  ProcedureReturn BackslashCount % 2
+EndProcedure
+
+; -----------------------------------------------------------------------------
 ; Returns true when a procedure's outer argument list is balanced.
 ; -----------------------------------------------------------------------------
 Procedure IsProcedureSignatureComplete(Line$)
-  Protected Index.i, Depth.i, Started.i, InString.i
+  Protected Index.i, Depth.i, Started.i, InString.i, EscapedString.i
   Protected Character$
   For Index = 1 To Len(Line$)
     Character$ = Mid(Line$, Index, 1)
     If Character$ = #DQUOTE$
-      InString = Bool(Not InString)
+      If InString
+        If Not EscapedString Or Not IsQuoteEscaped(Line$, Index)
+          InString = #False
+          EscapedString = #False
+        EndIf
+      Else
+        InString = #True
+        EscapedString = Bool(Index > 1 And Mid(Line$, Index - 1, 1) = "~")
+      EndIf
     ElseIf Not InString
       If Character$ = ";"
         Break
@@ -74,6 +95,31 @@ Procedure IsProcedureSignatureComplete(Line$)
     EndIf
   Next
   ProcedureReturn #False
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Removes a trailing comment while preserving semicolons inside strings.
+; -----------------------------------------------------------------------------
+Procedure.s StripTrailingComment(Line$)
+  Protected Index.i, InString.i, EscapedString.i
+  Protected Character$
+  For Index = 1 To Len(Line$)
+    Character$ = Mid(Line$, Index, 1)
+    If Character$ = #DQUOTE$
+      If InString
+        If Not EscapedString Or Not IsQuoteEscaped(Line$, Index)
+          InString = #False
+          EscapedString = #False
+        EndIf
+      Else
+        InString = #True
+        EscapedString = Bool(Index > 1 And Mid(Line$, Index - 1, 1) = "~")
+      EndIf
+    ElseIf Not InString And Character$ = ";"
+      ProcedureReturn TrimStatement(Left(Line$, Index - 1))
+    EndIf
+  Next
+  ProcedureReturn TrimStatement(Line$)
 EndProcedure
 
 #PBHGEN_VERSION$ = "5.73"
@@ -145,15 +191,17 @@ Global CodeLinesCount.l = 0
 Procedure.s CollectProcedureSignature(StartIndex.i, *LastIndex)
   Protected *ResultIndex.Integer = *LastIndex
   Protected Index.i = StartIndex
-  Protected Signature$ = TrimStatement(CodeLines$(Index))
+  Protected Signature$ = StripTrailingComment(TrimStatement(CodeLines$(Index)))
   Protected NextStatement$
   While Not IsProcedureSignatureComplete(Signature$) And Index + 1 < CodeLinesCount
     Index + 1
-    NextStatement$ = TrimStatement(CodeLines$(Index))
-    If Right(Signature$, 1) = "," Or Left(NextStatement$, 1) = ")"
-      Signature$ + NextStatement$
-    Else
-      Signature$ + " " + NextStatement$
+    NextStatement$ = StripTrailingComment(TrimStatement(CodeLines$(Index)))
+    If NextStatement$ <> ""
+      If Right(Signature$, 1) = "," Or Left(NextStatement$, 1) = ")"
+        Signature$ + NextStatement$
+      Else
+        Signature$ + " " + NextStatement$
+      EndIf
     EndIf
   Wend
   *ResultIndex\i = Index
@@ -164,6 +212,7 @@ Procedure.s FilterArguments(Line$)
   NewL$ = ""
   IsInArguments.c = #False
   IsInString.c = #False
+  IsEscapedString.c = #False
   IsAtUnwanted.c = #False
   Skipping.c = #False
   
@@ -178,10 +227,14 @@ Procedure.s FilterArguments(Line$)
     If IsInArguments = #True
       
       If NextChar = #DQUOTE$ ; chr(34) " double quote
-        If Not IsInString
-          IsInString = #True
+        If IsInString
+          If Not IsEscapedString Or Not IsQuoteEscaped(Line$, i)
+            IsInString = #False
+            IsEscapedString = #False
+          EndIf
         Else
-          IsInString = #False
+          IsInString = #True
+          IsEscapedString = Bool(i > 1 And Mid(Line$, i - 1, 1) = "~")
         EndIf
       EndIf
       
@@ -574,7 +627,8 @@ If Program\SourceFileHandle And Program\HeaderFileHandle
   Define ParseIndex.i, LastLineIndex.i
   For ParseIndex = 0 To CodeLinesCount -1
     Program\CurrentLine$ = CodeLines$(ParseIndex)
-    If IsBeginProcedure(Program\CurrentLine$)
+    If (Program\CurrentState = #PBHGEN_STATE_GLOBAL Or Program\CurrentState = #PBHGEN_STATE_MODULE_GLOBAL) And
+       IsBeginProcedure(Program\CurrentLine$)
       Program\CurrentLine$ = CollectProcedureSignature(ParseIndex, @LastLineIndex)
       ParseIndex = LastLineIndex
     EndIf

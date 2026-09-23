@@ -9,7 +9,9 @@
 
 CompilerIf #PB_Compiler_Module = ""
 Declare.s TrimStatement(Line$)
+Declare IsQuoteEscaped(Line$, QuoteIndex.i)
 Declare IsProcedureSignatureComplete(Line$)
+Declare.s StripTrailingComment(Line$)
 Declare ExplodeStringArray(Array a$(1), s$, delimeter$)
 Declare ExplodeCodeLine(Array Results$(1), Code$)
 Declare.s CollectProcedureSignature(StartIndex.i, *LastIndex)

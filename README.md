@@ -41,6 +41,8 @@ At the moment if you wish to have a procedure with structured List/Array/Map arg
 
 Procedure declarations may be indented with spaces or tabs. Multiline signatures are supported, including signatures with more than six parameters and default expressions containing nested parentheses.
 
+Continued signatures may contain trailing comments, and quoted defaults may use PureBasic escaped-string syntax.
+
 Typed pointer parameters retain their structure suffixes, including module-qualified structure names.
 
 ### Motivation
