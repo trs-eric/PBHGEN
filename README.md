@@ -43,6 +43,8 @@ Procedure declarations may be indented with spaces or tabs. Multiline signatures
 
 Continued signatures may contain trailing comments, and quoted defaults may use PureBasic escaped-string syntax.
 
+Colons inside ordinary or escaped string literals and comments are preserved. Only unquoted colons split multiple statements on one physical line; module separators using `::` remain intact.
+
 Typed pointer parameters retain their structure suffixes, including module-qualified structure names.
 
 ### Motivation

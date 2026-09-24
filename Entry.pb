@@ -157,28 +157,50 @@ Procedure ExplodeCodeLine(Array Results$(1), Code$)
   Protected Length.l = Len(Code$)
   Protected Index.l = 1
   Protected Accumulator$ = ""
-  For Index = 1 To Length
-    Protected IndexColon.l = FindString(Code$, ":", Index)
-    Protected IndexModule.l = FindString(Code$, "::", Index)
-    ; no colon could be found at this point.
-    If IndexColon = 0 And IndexModule = 0
-      ReDim Results$(Results)
-      Results$(Results) = Accumulator$ + Mid(Code$, Index, Length - Index + 1) : Results + 1
-      Break
-    EndIf
-    ; currently at a module separator:
-    If IndexColon = IndexModule
-      Accumulator$ + Mid(Code$, Index, IndexColon - Index) + "::"
-      Index + (IndexColon - Index) + 1
-    ; currently at a colon separator:
+  Protected Character$
+  Protected InString.a
+  Protected EscapedString.a
+
+  While Index <= Length
+    Character$ = Mid(Code$, Index, 1)
+    If InString
+      Accumulator$ + Character$
+      If Character$ = #DQUOTE$ And (Not EscapedString Or Not IsQuoteEscaped(Code$, Index))
+        InString = #False
+        EscapedString = #False
+      EndIf
     Else
-      ReDim Results$(Results)
-      Results$(Results) = Accumulator$ + Mid(Code$, Index, IndexColon - Index) : Results + 1
-      Accumulator$ = ""
-      Index + (IndexColon - Index)
+      Select Character$
+        Case #DQUOTE$
+          Accumulator$ + Character$
+          InString = #True
+          EscapedString = Bool(Index > 1 And Mid(Code$, Index - 1, 1) = "~")
+        Case ";"
+          Accumulator$ + Mid(Code$, Index, Length - Index + 1)
+          Index = Length
+        Case ":"
+          If Index < Length And Mid(Code$, Index + 1, 1) = ":"
+            Accumulator$ + "::"
+            Index + 1
+          Else
+            ReDim Results$(Results)
+            Results$(Results) = Accumulator$
+            Results + 1
+            Accumulator$ = ""
+          EndIf
+        Default
+          Accumulator$ + Character$
+      EndSelect
     EndIf
-  Next
-  
+    Index + 1
+  Wend
+
+  If Accumulator$ <> "" Or Results = 0
+    ReDim Results$(Results)
+    Results$(Results) = Accumulator$
+    Results + 1
+  EndIf
+
   ProcedureReturn Results
 EndProcedure
 

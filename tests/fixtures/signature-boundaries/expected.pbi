@@ -10,4 +10,9 @@
 CompilerIf #PB_Compiler_Module = ""
 Declare.i Tabbed(value.i)
 Declare.s ManyParameters(first.i,second.i,third.i,fourth.i,fifth.i,sixth.i,seventh.s = "text (inside)",eighth.i = Max(1, 2))
+Declare.s QuotedColon(text.s = "a:b")
+Declare.s EscapedQuotedColon(text.s = ~"a\":b")
+Declare.s CommentColon(text.s = "keep")
+Declare.i FirstColon()
+Declare.i SecondColon()
 CompilerEndIf

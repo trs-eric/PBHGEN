@@ -13,3 +13,17 @@ Procedure.s ManyParameters(first.i,
                           )
   ProcedureReturn seventh
 EndProcedure
+
+Procedure.s QuotedColon(text.s = "a:b")
+  ProcedureReturn text
+EndProcedure
+
+Procedure.s EscapedQuotedColon(text.s = ~"a\":b")
+  ProcedureReturn text
+EndProcedure
+
+Procedure.s CommentColon(text.s = "keep") ; comment: this is not a statement
+  ProcedureReturn text
+EndProcedure
+
+Procedure.i FirstColon(): ProcedureReturn 1 : EndProcedure : Procedure.i SecondColon(): ProcedureReturn 2 : EndProcedure
