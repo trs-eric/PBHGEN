@@ -40,6 +40,16 @@ fully written and closed; file-access failures return exit code `3`. This makes
 it safe for an editor or build step to compile the source immediately after a
 successful PBHGEN process exit.
 
+Generate several adjacent headers in one ordered invocation with `--batch`:
+
+```text
+PBHGEN.exe --batch first.pb second.pb
+```
+
+The explicit option preserves compatibility with IDE configurations that pass
+one unquoted source path containing spaces. Batch processing stops at the first
+failure; headers completed earlier in the list remain valid.
+
 When PBHGEN recognizes a procedure whose declaration cannot be generated
 safely, it returns exit code `4` and leaves an existing header unchanged.
 Console builds report the source path, physical line number, stable diagnostic

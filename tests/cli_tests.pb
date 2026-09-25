@@ -212,6 +212,36 @@ Procedure TestIdenticalOutputPreservesTimestamp()
              "changed output replaces the destination completely")
 EndProcedure
 
+Procedure TestBatchGeneration()
+  Protected FixtureRoot.s = GetCurrentDirectory() + "tests" + #PS$ +
+                            "fixtures" + #PS$
+  Protected FirstDirectory.s = TestRoot + "batch-first" + #PS$
+  Protected SecondDirectory.s = TestRoot + "batch-second" + #PS$
+  Protected FirstSource.s = FirstDirectory + "source.pb"
+  Protected SecondSource.s = SecondDirectory + "source.pb"
+  Protected Result.ProcessResult
+  Protected Arguments.s
+  Protected FirstActual.s, FirstExpected.s
+  Protected SecondActual.s, SecondExpected.s
+
+  AssertTrue(CreateDirectory(FirstDirectory), "create first batch directory")
+  AssertTrue(CreateDirectory(SecondDirectory), "create second batch directory")
+  AssertTrue(CopyFile(FixtureRoot + "batch-first" + #PS$ + "source.pb", FirstSource),
+             "copy first batch fixture")
+  AssertTrue(CopyFile(FixtureRoot + "batch-second" + #PS$ + "source.pb", SecondSource),
+             "copy second batch fixture")
+  Arguments = "--batch " + FirstSource + " " + SecondSource
+  AssertTrue(RunBounded(Generator, Arguments, TestRoot, @Result),
+             "batch generation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "batch generation succeeds")
+  FirstActual = ReadTextFile(FirstSource + "i")
+  FirstExpected = ReadTextFile(FixtureRoot + "batch-first" + #PS$ + "expected.pbi")
+  SecondActual = ReadTextFile(SecondSource + "i")
+  SecondExpected = ReadTextFile(FixtureRoot + "batch-second" + #PS$ + "expected.pbi")
+  AssertTrue(Bool(FirstActual = FirstExpected), "first batch header matches")
+  AssertTrue(Bool(SecondActual = SecondExpected), "second batch header matches")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -246,6 +276,9 @@ Procedure Main()
   EndIf
   If CaseName = "" Or CaseName = "stage4"
     TestIdenticalOutputPreservesTimestamp()
+  EndIf
+  If CaseName = "" Or CaseName = "stage5"
+    TestBatchGeneration()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)

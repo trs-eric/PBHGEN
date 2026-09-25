@@ -35,4 +35,5 @@ Declare WriteHeaderPrologue()
 Declare ParseLine(Line$)
 Declare.i GenerateSource(SourceFileName.s)
 Declare.s LegacySourceArgument()
+Declare.i RunApplication()
 CompilerEndIf

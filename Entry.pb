@@ -875,10 +875,34 @@ Procedure.s LegacySourceArgument()
   ProcedureReturn SourceFileName
 EndProcedure
 
+; -----------------------------------------------------------------------------
+; Dispatch the legacy single-source form or an explicit ordered batch.
+; -----------------------------------------------------------------------------
+Procedure.i RunApplication()
+  Protected Index.i
+  Protected ExitCode.i
+
+  If CountProgramParameters() > 0 And LCase(ProgramParameter(0)) = "--batch"
+    If CountProgramParameters() < 2
+      SetDiagnostic("PBHGEN", 0, "CLI001", "--batch requires at least one source file")
+      ProcedureReturn 2
+    EndIf
+    For Index = 1 To CountProgramParameters() - 1
+      ExitCode = GenerateSource(ProgramParameter(Index))
+      If ExitCode <> 0
+        ProcedureReturn ExitCode
+      EndIf
+    Next
+    ProcedureReturn 0
+  EndIf
+
+  ProcedureReturn GenerateSource(LegacySourceArgument())
+EndProcedure
+
 CompilerIf #PB_Compiler_Console
   OpenConsole()
 CompilerEndIf
-End GenerateSource(LegacySourceArgument())
+End RunApplication()
 ; IDE Options = PureBasic 5.73 LTS (Windows - x86)
 ; Folding = ---
 ; EnableXP
