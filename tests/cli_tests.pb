@@ -4,6 +4,7 @@
 ; case name. Every child process has a finite timeout.
 
 EnableExplicit
+UseSHA2Fingerprint()
 
 #TestTimeoutMilliseconds = 20000
 
@@ -323,6 +324,47 @@ Procedure TestAutomationOptions()
              "batch output selection returns usage exit code 2")
 EndProcedure
 
+Procedure TestReproducibleBuild()
+  Protected Compiler.s
+  Protected Builder.s
+  Protected Source.s = GetCurrentDirectory() + "Entry.pb"
+  Protected FirstOutput.s = TestRoot + "reproducible-first.exe"
+  Protected SecondOutput.s = TestRoot + "reproducible-second.exe"
+  Protected Result.ProcessResult
+  Protected Arguments.s
+  Protected FirstHash.s, SecondHash.s
+
+  If CountProgramParameters() < 4
+    ReportFailure("stage7 requires compiler and build-helper paths")
+    ProcedureReturn
+  EndIf
+  Compiler = ProgramParameter(2)
+  Builder = ProgramParameter(3)
+
+  Arguments = "--compiler " + Compiler + " --source " + Source +
+              " --output " + FirstOutput + " --timeout 30"
+  AssertTrue(RunBounded(Builder, Arguments, GetCurrentDirectory(), @Result),
+             "first reproducible build completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "first reproducible build succeeds")
+
+  Arguments = "--compiler " + Compiler + " --source " + Source +
+              " --output " + SecondOutput + " --timeout 30"
+  AssertTrue(RunBounded(Builder, Arguments, GetCurrentDirectory(), @Result),
+             "second reproducible build completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "second reproducible build succeeds")
+
+  FirstHash = FileFingerprint(FirstOutput, #PB_Cipher_SHA2, 256)
+  SecondHash = FileFingerprint(SecondOutput, #PB_Cipher_SHA2, 256)
+  AssertTrue(Bool(FirstHash <> ""), "first reproducible build has a SHA-256 digest")
+  AssertTrue(Bool(FirstHash = SecondHash), "repeated builds are byte-for-byte reproducible")
+
+  AssertTrue(RunBounded(FirstOutput, "--version", TestRoot, @Result),
+             "reproducible executable launches")
+  AssertTrue(Bool(Result\ExitCode = 0), "reproducible executable succeeds")
+  AssertTrue(Bool(FindString(Result\Output, "PBHGEN 5.73") > 0),
+             "reproducible executable reports the expected version")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -363,6 +405,9 @@ Procedure Main()
   EndIf
   If CaseName = "" Or CaseName = "stage6"
     TestAutomationOptions()
+  EndIf
+  If CaseName = "stage7"
+    TestReproducibleBuild()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)

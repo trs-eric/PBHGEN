@@ -76,6 +76,17 @@ The stable process exit codes are:
 | `3` | A source, destination, or filesystem operation failed |
 | `4` | A source declaration could not be represented safely |
 
+### Reproducible builds and tests
+
+The PureBasic build entry point at `scripts/build.pb` uses explicit compiler,
+source, output, and timeout arguments. It applies fixed console and thread-safe
+compiler flags and verifies the resulting executable with `--version`.
+
+The public `tests/cli_tests.pb` runner covers the CLI, parser goldens, atomic
+output, batch generation, JSON diagnostics, and reproducibility. Every child
+process has a finite timeout. See [COMPATIBILITY.md](COMPATIBILITY.md) for exact
+build commands and the configurations that have actually passed the suite.
+
 When PBHGEN recognizes a procedure whose declaration cannot be generated
 safely, it returns exit code `4` and leaves an existing header unchanged.
 Console builds report the source path, physical line number, stable diagnostic
