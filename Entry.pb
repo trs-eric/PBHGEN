@@ -1,6 +1,6 @@
 ; ----------------------------------------------------------------------- ;
 ;  -- PureBasic Header Generator                                      --  ;
-;  -- Copyright � Henry de Jongh 2013-2021                            --  ;
+;  -- Copyright © Henry de Jongh 2013-2021                            --  ;
 ;  -- http://00laboratories.com/                                      --  ;
 ;  -- License: MIT                                                    --  ;
 ; ----------------------------------------------------------------------- ;
@@ -588,66 +588,69 @@ EndProcedure
 
 
 ; -----------------------------------------------------------------------------
-If CountProgramParameters() = 1
-  Program\SourceFileName$ = ProgramParameter(0)
-Else
-  Program\SourceFileName$ = ProgramParameter(0)
-  For i=1 To CountProgramParameters() -1
-    Program\SourceFileName$ + " " + ProgramParameter(i)
-  Next
-EndIf
-
-If GetExtensionPart(Program\SourceFileName$) = "pb"
-  Program\IsSpiderBasic = #False
-ElseIf GetExtensionPart(Program\SourceFileName$) = "sb"
-  Program\IsSpiderBasic = #True
-Else
-  End
-EndIf
-
-Program\HeaderFileName$ = Program\SourceFileName$ + "i"
+; Generate one adjacent header and return a stable process exit code.
 ; -----------------------------------------------------------------------------
-Program\SourceFileHandle = ReadFile(#PB_Any, Program\SourceFileName$)
-Program\HeaderFileHandle = CreateFile(#PB_Any, Program\HeaderFileName$)
+Procedure.i GenerateSource(SourceFileName.s)
+  Protected i.i, ParseIndex.i, LastLineIndex.i
+  Protected CommentDetected.a
+  Dim CodeChunks$(0)
 
-If Program\SourceFileHandle And Program\HeaderFileHandle
-  
+  Program\SourceFileName$ = SourceFileName
+  Select LCase(GetExtensionPart(Program\SourceFileName$))
+    Case "pb"
+      Program\IsSpiderBasic = #False
+    Case "sb"
+      Program\IsSpiderBasic = #True
+    Default
+      CompilerIf #PB_Compiler_Console
+        PrintN("PBHGEN: unsupported source path: " + Program\SourceFileName$)
+      CompilerEndIf
+      ProcedureReturn 3
+  EndSelect
+
+  Program\HeaderFileName$ = Program\SourceFileName$ + "i"
+  Program\SourceFileHandle = ReadFile(#PB_Any, Program\SourceFileName$)
+  If Not Program\SourceFileHandle
+    CompilerIf #PB_Compiler_Console
+      PrintN("PBHGEN: unable to read source: " + Program\SourceFileName$)
+    CompilerEndIf
+    ProcedureReturn 3
+  EndIf
+
+  Program\HeaderFileHandle = CreateFile(#PB_Any, Program\HeaderFileName$)
+  If Not Program\HeaderFileHandle
+    CloseFile(Program\SourceFileHandle)
+    ProcedureReturn 3
+  EndIf
+
   While Not Eof(Program\SourceFileHandle)
     Program\CurrentLine$ = ReadString(Program\SourceFileHandle)
-    ; STOP: First we will seperate on colons to parse every "line" of code properly:
-    Dim CodeChunks$(0)
     ExplodeCodeLine(CodeChunks$(), Program\CurrentLine$)
-    
-    ; While iterating below, if we encounter a comment then after each colon a semicolon must be added to keep it a comment.
-    Define CommentDetected.a = #False
-    
-    ; Iterate through all new colon seperated lines:
+    CommentDetected = #False
+
     For i = 0 To ArraySize(CodeChunks$())
-      ; Add line to collection:
       ReDim CodeLines$(CodeLinesCount)
-      CodeLines$(CodeLinesCount) = TrimStatement(CodeChunks$(i)) ; Trim horizontal whitespace from beginning / end of line.
-      
-      ; Remove "Runtime" keyword as it's not important.
+      CodeLines$(CodeLinesCount) = TrimStatement(CodeChunks$(i))
+
       If LCase(Left(CodeLines$(CodeLinesCount), 8)) = "runtime "
-        CodeLines$(CodeLinesCount) = Trim(Mid(CodeLines$(CodeLinesCount), 8)) ; Trim whitespace from beginning / end of line.
+        CodeLines$(CodeLinesCount) = Trim(Mid(CodeLines$(CodeLinesCount), 8))
       EndIf
-      
-      ; Handle comments after a colon was detected.
+
       If IsComment(CodeLines$(CodeLinesCount))
         CommentDetected = #True
       EndIf
       If CommentDetected
         CodeLines$(CodeLinesCount) = ";" + CodeLines$(CodeLinesCount)
       EndIf
-      
-      CodeLinesCount +1
+
+      CodeLinesCount + 1
     Next
   Wend
-  
+
   CloseFile(Program\SourceFileHandle)
-  
-  Define ParseIndex.i, LastLineIndex.i
-  For ParseIndex = 0 To CodeLinesCount -1
+  Program\SourceFileHandle = 0
+
+  For ParseIndex = 0 To CodeLinesCount - 1
     Program\CurrentLine$ = CodeLines$(ParseIndex)
     If (Program\CurrentState = #PBHGEN_STATE_GLOBAL Or Program\CurrentState = #PBHGEN_STATE_MODULE_GLOBAL) And
        IsBeginProcedure(Program\CurrentLine$)
@@ -656,13 +659,35 @@ If Program\SourceFileHandle And Program\HeaderFileHandle
     EndIf
     ParseLine(Program\CurrentLine$)
   Next
-  
+
   WriteHeader("CompilerEndIf")
-  
   CloseFile(Program\HeaderFileHandle)
-Else
-  End ; Unable to access the files required.
-EndIf
+  Program\HeaderFileHandle = 0
+  ProcedureReturn 0
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Preserve the legacy IDE behavior that joins an unquoted path containing
+; spaces into one source argument.
+; -----------------------------------------------------------------------------
+Procedure.s LegacySourceArgument()
+  Protected Index.i
+  Protected SourceFileName.s
+
+  If CountProgramParameters() = 0
+    ProcedureReturn ""
+  EndIf
+  SourceFileName = ProgramParameter(0)
+  For Index = 1 To CountProgramParameters() - 1
+    SourceFileName + " " + ProgramParameter(Index)
+  Next
+  ProcedureReturn SourceFileName
+EndProcedure
+
+CompilerIf #PB_Compiler_Console
+  OpenConsole()
+CompilerEndIf
+End GenerateSource(LegacySourceArgument())
 ; IDE Options = PureBasic 5.73 LTS (Windows - x86)
 ; Folding = ---
 ; EnableXP
@@ -673,4 +698,4 @@ EndIf
 ; VersionField2 = 00laboratories
 ; VersionField3 = PB Header Generator
 ; VersionField6 = Generate PB Header
-; VersionField9 = copyright ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© 00laboratories 2013
+; VersionField9 = copyright ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© 00laboratories 2013

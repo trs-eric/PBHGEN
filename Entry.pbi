@@ -28,4 +28,6 @@ Declare IsEndMacro(Line$)
 Declare.s ParseProcedure(Line$)
 Declare.s ParseModuleName(Line$)
 Declare ParseLine(Line$)
+Declare.i GenerateSource(SourceFileName.s)
+Declare.s LegacySourceArgument()
 CompilerEndIf

@@ -35,6 +35,11 @@ Module MyModule
 EndModule
 ```
 
+PBHGEN runs synchronously. Exit code `0` means the generated header has been
+fully written and closed; file-access failures return exit code `3`. This makes
+it safe for an editor or build step to compile the source immediately after a
+successful PBHGEN process exit.
+
 ### Remarks
 
 At the moment if you wish to have a procedure with structured List/Array/Map arguments, you will have to put that procedure above the code where you call it from. This does not apply when using basic types and is a limitation of PureBasic.
