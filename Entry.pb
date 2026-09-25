@@ -23,6 +23,7 @@ Structure ProgramData
   IsSpiderBasic.a         ; whether the source belongs to spider basic.
 EndStructure
 Global Program.ProgramData
+Global DiagnosticJSON.i
 
 Structure DiagnosticData
   SourceFileName.s
@@ -500,16 +501,95 @@ Procedure.s ParseModuleName(Line$)
 EndProcedure
 
 ; -----------------------------------------------------------------------------
+; Escape a string for one-line JSON diagnostics.
+; -----------------------------------------------------------------------------
+Procedure.s EscapeJSON(Value.s)
+  Protected Result.s = ReplaceString(Value, "\", "\\")
+  Result = ReplaceString(Result, #DQUOTE$, "\" + #DQUOTE$)
+  Result = ReplaceString(Result, #CR$, "\r")
+  Result = ReplaceString(Result, #LF$, "\n")
+  Result = ReplaceString(Result, #TAB$, "\t")
+  ProcedureReturn Result
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Emit one JSON Lines result when machine-readable diagnostics are active.
+; -----------------------------------------------------------------------------
+Procedure EmitResult(SourceFileName.s, OutputFileName.s, Status.s, Code.s,
+                     Message.s, LineNumber.i, ExitCode.i)
+  CompilerIf #PB_Compiler_Console
+    If DiagnosticJSON
+      PrintN("{" +
+             #DQUOTE$ + "source" + #DQUOTE$ + ":" + #DQUOTE$ + EscapeJSON(SourceFileName) + #DQUOTE$ + "," +
+             #DQUOTE$ + "output" + #DQUOTE$ + ":" + #DQUOTE$ + EscapeJSON(OutputFileName) + #DQUOTE$ + "," +
+             #DQUOTE$ + "line" + #DQUOTE$ + ":" + Str(LineNumber) + "," +
+             #DQUOTE$ + "status" + #DQUOTE$ + ":" + #DQUOTE$ + EscapeJSON(Status) + #DQUOTE$ + "," +
+             #DQUOTE$ + "code" + #DQUOTE$ + ":" + #DQUOTE$ + EscapeJSON(Code) + #DQUOTE$ + "," +
+             #DQUOTE$ + "message" + #DQUOTE$ + ":" + #DQUOTE$ + EscapeJSON(Message) + #DQUOTE$ + "," +
+             #DQUOTE$ + "exit_code" + #DQUOTE$ + ":" + Str(ExitCode) + "}")
+    EndIf
+  CompilerEndIf
+EndProcedure
+
+; -----------------------------------------------------------------------------
 ; Store and print one precise diagnostic for the current source.
 ; -----------------------------------------------------------------------------
 Procedure SetDiagnostic(SourceFileName.s, LineNumber.i, Code.s, Message.s)
+  Protected ExitCode.i = 4
   LastDiagnostic\SourceFileName = SourceFileName
   LastDiagnostic\LineNumber = LineNumber
   LastDiagnostic\Code = Code
   LastDiagnostic\Message = Message
+  Select Left(Code, 2)
+    Case "CL"
+      ExitCode = 2
+    Case "IO"
+      ExitCode = 3
+  EndSelect
   CompilerIf #PB_Compiler_Console
-    PrintN(SourceFileName + "(" + Str(LineNumber) + "): error " + Code + ": " + Message)
+    If DiagnosticJSON
+      EmitResult(SourceFileName, Program\HeaderFileName$, "error", Code,
+                 Message, LineNumber, ExitCode)
+    Else
+      PrintN(SourceFileName + "(" + Str(LineNumber) + "): error " + Code + ": " + Message)
+    EndIf
   CompilerEndIf
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Compare the in-memory header with an existing destination byte-for-byte.
+; -----------------------------------------------------------------------------
+Procedure GeneratedHeaderMatches(Destination.s)
+  Protected ExpectedLength.i = StringByteLength(GeneratedHeader, #PB_Ascii)
+  Protected File.i
+  Protected ReadLength.i
+  Protected Result.i
+  Protected *Actual
+  Protected *Expected
+
+  If FileSize(Destination) <> ExpectedLength
+    ProcedureReturn #False
+  EndIf
+  File = ReadFile(#PB_Any, Destination)
+  If Not File
+    ProcedureReturn #False
+  EndIf
+  *Actual = AllocateMemory(ExpectedLength + 1)
+  *Expected = AllocateMemory(ExpectedLength + 1)
+  If *Actual And *Expected
+    ReadLength = ReadData(File, *Actual, ExpectedLength)
+    PokeS(*Expected, GeneratedHeader, -1, #PB_Ascii)
+    Result = Bool(ReadLength = ExpectedLength And
+                  CompareMemory(*Actual, *Expected, ExpectedLength))
+  EndIf
+  CloseFile(File)
+  If *Actual
+    FreeMemory(*Actual)
+  EndIf
+  If *Expected
+    FreeMemory(*Expected)
+  EndIf
+  ProcedureReturn Result
 EndProcedure
 
 ; -----------------------------------------------------------------------------
@@ -777,7 +857,7 @@ EndProcedure
 ; -----------------------------------------------------------------------------
 ; Generate one adjacent header and return a stable process exit code.
 ; -----------------------------------------------------------------------------
-Procedure.i GenerateSource(SourceFileName.s)
+Procedure.i GenerateSource(SourceFileName.s, OutputFileName.s = "", CheckOnly.i = #False)
   Protected i.i, ParseIndex.i, LastLineIndex.i, PhysicalLineNumber.i
   Protected CommentDetected.a
   Dim CodeChunks$(0)
@@ -800,7 +880,11 @@ Procedure.i GenerateSource(SourceFileName.s)
       ProcedureReturn 3
   EndSelect
 
-  Program\HeaderFileName$ = Program\SourceFileName$ + "i"
+  If OutputFileName = ""
+    Program\HeaderFileName$ = Program\SourceFileName$ + "i"
+  Else
+    Program\HeaderFileName$ = OutputFileName
+  EndIf
   Program\SourceFileHandle = ReadFile(#PB_Any, Program\SourceFileName$)
   If Not Program\SourceFileHandle
     SetDiagnostic(Program\SourceFileName$, 0, "IO002", "Unable to read source file")
@@ -854,7 +938,27 @@ Procedure.i GenerateSource(SourceFileName.s)
   Next
 
   WriteHeader("CompilerEndIf")
-  ProcedureReturn InstallGeneratedHeader(Program\HeaderFileName$)
+  If CheckOnly
+    If GeneratedHeaderMatches(Program\HeaderFileName$)
+      EmitResult(Program\SourceFileName$, Program\HeaderFileName$, "ok", "", "", 0, 0)
+      ProcedureReturn 0
+    EndIf
+    If DiagnosticJSON
+      EmitResult(Program\SourceFileName$, Program\HeaderFileName$, "stale", "CHECK001",
+                 "Generated header is missing or stale", 0, 1)
+    Else
+      CompilerIf #PB_Compiler_Console
+        PrintN(Program\SourceFileName$ + "(0): warning CHECK001: Generated header is missing or stale")
+      CompilerEndIf
+    EndIf
+    ProcedureReturn 1
+  EndIf
+
+  Protected InstallResult.i = InstallGeneratedHeader(Program\HeaderFileName$)
+  If InstallResult = 0
+    EmitResult(Program\SourceFileName$, Program\HeaderFileName$, "ok", "", "", 0, 0)
+  EndIf
+  ProcedureReturn InstallResult
 EndProcedure
 
 ; -----------------------------------------------------------------------------
@@ -879,24 +983,89 @@ EndProcedure
 ; Dispatch the legacy single-source form or an explicit ordered batch.
 ; -----------------------------------------------------------------------------
 Procedure.i RunApplication()
-  Protected Index.i
+  Protected Index.i, SourceCount.i
   Protected ExitCode.i
+  Protected Argument.s
+  Protected BatchMode.i, CheckOnly.i, VersionOnly.i
+  Protected OutputFileName.s
+  NewList Sources.s()
 
-  If CountProgramParameters() > 0 And LCase(ProgramParameter(0)) = "--batch"
-    If CountProgramParameters() < 2
-      SetDiagnostic("PBHGEN", 0, "CLI001", "--batch requires at least one source file")
+  If CountProgramParameters() = 0
+    SetDiagnostic("PBHGEN", 0, "CLI001", "A source file or option is required")
+    ProcedureReturn 2
+  EndIf
+
+  If Left(ProgramParameter(0), 2) <> "--"
+    ProcedureReturn GenerateSource(LegacySourceArgument())
+  EndIf
+
+  Index = 0
+  While Index < CountProgramParameters()
+    Argument = ProgramParameter(Index)
+    Select LCase(Argument)
+      Case "--batch"
+        BatchMode = #True
+      Case "--check"
+        CheckOnly = #True
+      Case "--version"
+        VersionOnly = #True
+      Case "--output"
+        Index + 1
+        If Index >= CountProgramParameters()
+          SetDiagnostic("PBHGEN", 0, "CLI002", "--output requires a path")
+          ProcedureReturn 2
+        EndIf
+        OutputFileName = ProgramParameter(Index)
+      Case "--diagnostics"
+        Index + 1
+        If Index >= CountProgramParameters() Or LCase(ProgramParameter(Index)) <> "json"
+          SetDiagnostic("PBHGEN", 0, "CLI003", "--diagnostics supports only json")
+          ProcedureReturn 2
+        EndIf
+        DiagnosticJSON = #True
+      Default
+        If Left(Argument, 2) = "--"
+          SetDiagnostic("PBHGEN", 0, "CLI004", "Unknown option: " + Argument)
+          ProcedureReturn 2
+        EndIf
+        AddElement(Sources())
+        Sources() = Argument
+    EndSelect
+    Index + 1
+  Wend
+
+  SourceCount = ListSize(Sources())
+  If VersionOnly
+    If SourceCount > 0 Or BatchMode Or CheckOnly Or OutputFileName <> "" Or DiagnosticJSON
+      SetDiagnostic("PBHGEN", 0, "CLI005", "--version cannot be combined with generation options")
       ProcedureReturn 2
     EndIf
-    For Index = 1 To CountProgramParameters() - 1
-      ExitCode = GenerateSource(ProgramParameter(Index))
-      If ExitCode <> 0
-        ProcedureReturn ExitCode
-      EndIf
-    Next
+    CompilerIf #PB_Compiler_Console
+      PrintN("PBHGEN " + #PBHGEN_VERSION$)
+    CompilerEndIf
     ProcedureReturn 0
   EndIf
 
-  ProcedureReturn GenerateSource(LegacySourceArgument())
+  If SourceCount = 0
+    SetDiagnostic("PBHGEN", 0, "CLI001", "At least one source file is required")
+    ProcedureReturn 2
+  EndIf
+  If Not BatchMode And SourceCount <> 1
+    SetDiagnostic("PBHGEN", 0, "CLI006", "Multiple sources require --batch")
+    ProcedureReturn 2
+  EndIf
+  If BatchMode And OutputFileName <> ""
+    SetDiagnostic("PBHGEN", 0, "CLI007", "--output cannot be combined with --batch")
+    ProcedureReturn 2
+  EndIf
+
+  ForEach Sources()
+    ExitCode = GenerateSource(Sources(), OutputFileName, CheckOnly)
+    If ExitCode <> 0
+      ProcedureReturn ExitCode
+    EndIf
+  Next
+  ProcedureReturn 0
 EndProcedure
 
 CompilerIf #PB_Compiler_Console

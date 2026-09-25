@@ -242,6 +242,87 @@ Procedure TestBatchGeneration()
   AssertTrue(Bool(SecondActual = SecondExpected), "second batch header matches")
 EndProcedure
 
+Procedure TestAutomationOptions()
+  Protected Source.s = TestRoot + "options.pb"
+  Protected Header.s = Source + "i"
+  Protected Selected.s = TestRoot + "selected-output.pbi"
+  Protected Result.ProcessResult
+  Protected OriginalHeader.s
+  Protected JSON.i
+
+  AssertTrue(WriteTextFile(Source,
+             "; command-line options fixture" + #CRLF$ +
+             "Procedure Options()" + #CRLF$ +
+             "EndProcedure" + #CRLF$),
+             "create command-line options source")
+
+  AssertTrue(RunBounded(Generator, "--check " + Source, TestRoot, @Result),
+             "missing check completes")
+  AssertTrue(Bool(Result\ExitCode = 1), "missing check returns stale exit code 1")
+  AssertTrue(Bool(FileSize(Header) = -1), "check mode does not create a header")
+
+  AssertTrue(RunBounded(Generator, Source, TestRoot, @Result),
+             "options source generation completes")
+  OriginalHeader = ReadTextFile(Header)
+  AssertTrue(RunBounded(Generator, "--check " + Source, TestRoot, @Result),
+             "current check completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "current check succeeds")
+
+  AssertTrue(WriteTextFile(Source,
+             "; changed command-line options fixture" + #CRLF$ +
+             "Procedure Options()" + #CRLF$ +
+             "EndProcedure" + #CRLF$ +
+             "Procedure Stale()" + #CRLF$ +
+             "EndProcedure" + #CRLF$),
+             "change command-line options source")
+  AssertTrue(RunBounded(Generator, "--check " + Source, TestRoot, @Result),
+             "stale check completes")
+  AssertTrue(Bool(Result\ExitCode = 1), "stale check returns exit code 1")
+  AssertTrue(Bool(ReadTextFile(Header) = OriginalHeader),
+             "stale check leaves the header unchanged")
+
+  DeleteFile(Header, #PB_FileSystem_Force)
+  AssertTrue(RunBounded(Generator,
+             "--output " + Selected + " " + Source, TestRoot, @Result),
+             "selected output generation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "selected output succeeds")
+  AssertTrue(Bool(FileSize(Selected) >= 0), "selected output is created")
+  AssertTrue(Bool(FileSize(Header) = -1), "selected output does not create adjacent output")
+
+  AssertTrue(RunBounded(Generator, "--version", TestRoot, @Result),
+             "version query completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "version query succeeds")
+  AssertTrue(Bool(FindString(Result\Output, "PBHGEN 5.73") > 0),
+             "version query uses the public version constant")
+
+  AssertTrue(RunBounded(Generator,
+             "--diagnostics json " + TestRoot + "does-not-exist.pb", TestRoot, @Result),
+             "JSON error invocation completes")
+  AssertTrue(Bool(Result\ExitCode = 3), "JSON filesystem error returns exit code 3")
+  AssertTrue(Bool(FindString(Result\Output, ~"\"status\":\"error\"") > 0),
+             "JSON diagnostic reports error status")
+  AssertTrue(Bool(FindString(Result\Output, ~"\"code\":\"IO002\"") > 0),
+             "JSON diagnostic reports stable code")
+
+  AssertTrue(RunBounded(Generator,
+             "--diagnostics json " + Source, TestRoot, @Result),
+             "JSON success invocation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "JSON success invocation succeeds")
+  AssertTrue(Bool(FindString(Result\Output, ~"\"status\":\"ok\"") > 0),
+             "JSON diagnostic reports success status")
+  JSON = ParseJSON(#PB_Any, Trim(Result\Output))
+  AssertTrue(Bool(JSON <> 0), "JSON diagnostic is syntactically valid")
+  If JSON
+    FreeJSON(JSON)
+  EndIf
+
+  AssertTrue(RunBounded(Generator,
+             "--batch --output " + Selected + " " + Source, TestRoot, @Result),
+             "invalid option combination completes")
+  AssertTrue(Bool(Result\ExitCode = 2),
+             "batch output selection returns usage exit code 2")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -279,6 +360,9 @@ Procedure Main()
   EndIf
   If CaseName = "" Or CaseName = "stage5"
     TestBatchGeneration()
+  EndIf
+  If CaseName = "" Or CaseName = "stage6"
+    TestAutomationOptions()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)
