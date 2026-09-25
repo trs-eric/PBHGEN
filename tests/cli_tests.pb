@@ -176,6 +176,42 @@ Procedure TestFirstLogicalStatement()
              "first logical procedure is preserved")
 EndProcedure
 
+Procedure TestIdenticalOutputPreservesTimestamp()
+  Protected Source.s = TestRoot + "stable.pb"
+  Protected Header.s = Source + "i"
+  Protected Result.ProcessResult
+  Protected OriginalDate.i, CurrentDate.i
+
+  AssertTrue(WriteTextFile(Source,
+             "; stable output fixture" + #CRLF$ +
+             "Procedure Stable()" + #CRLF$ +
+             "EndProcedure" + #CRLF$),
+             "create stable-output source")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "initial stable-output generation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "initial stable-output generation succeeds")
+  OriginalDate = GetFileDate(Header, #PB_Date_Modified)
+  Delay(2100)
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "repeated stable-output generation completes")
+  CurrentDate = GetFileDate(Header, #PB_Date_Modified)
+  AssertTrue(Bool(Result\ExitCode = 0), "repeated stable-output generation succeeds")
+  AssertTrue(Bool(OriginalDate = CurrentDate),
+             "identical generation preserves the destination timestamp")
+  AssertTrue(WriteTextFile(Source,
+             "; changed output fixture" + #CRLF$ +
+             "Procedure Stable()" + #CRLF$ +
+             "EndProcedure" + #CRLF$ +
+             "Procedure Changed()" + #CRLF$ +
+             "EndProcedure" + #CRLF$),
+             "change stable-output source")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "changed output generation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "changed output generation succeeds")
+  AssertTrue(Bool(FindString(ReadTextFile(Header), "Declare Changed()") > 0),
+             "changed output replaces the destination completely")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -207,6 +243,9 @@ Procedure Main()
   EndIf
   If CaseName = "" Or CaseName = "stage3"
     TestFirstLogicalStatement()
+  EndIf
+  If CaseName = "" Or CaseName = "stage4"
+    TestIdenticalOutputPreservesTimestamp()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)

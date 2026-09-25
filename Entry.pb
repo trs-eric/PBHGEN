@@ -215,6 +215,7 @@ EndProcedure
 Global Dim CodeLines$(0)
 Global Dim CodeLineNumbers.i(0)
 Global CodeLinesCount.l = 0
+Global GeneratedHeader.s
 
 ; -----------------------------------------------------------------------------
 ; Joins logical statements until the complete procedure signature is present.
@@ -356,7 +357,7 @@ EndProcedure
 ; Output a string to the header file.
 ; -----------------------------------------------------------------------------
 Procedure WriteHeader(Str$)
-  WriteString(Program\HeaderFileHandle, Str$)
+  GeneratedHeader + Str$
 EndProcedure
 
 ; -----------------------------------------------------------------------------
@@ -509,6 +510,104 @@ Procedure SetDiagnostic(SourceFileName.s, LineNumber.i, Code.s, Message.s)
   CompilerIf #PB_Compiler_Console
     PrintN(SourceFileName + "(" + Str(LineNumber) + "): error " + Code + ": " + Message)
   CompilerEndIf
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Compare two files byte-for-byte without loading either complete file.
+; -----------------------------------------------------------------------------
+Procedure FilesIdentical(FirstPath.s, SecondPath.s)
+  Protected FirstFile.i, SecondFile.i
+  Protected FirstRead.i, SecondRead.i
+  Protected Result.i = #True
+  Protected *FirstBuffer = AllocateMemory(65536)
+  Protected *SecondBuffer = AllocateMemory(65536)
+
+  If FileSize(FirstPath) < 0 Or FileSize(FirstPath) <> FileSize(SecondPath) Or
+     Not *FirstBuffer Or Not *SecondBuffer
+    Result = #False
+  Else
+    FirstFile = ReadFile(#PB_Any, FirstPath)
+    SecondFile = ReadFile(#PB_Any, SecondPath)
+    If Not FirstFile Or Not SecondFile
+      Result = #False
+    Else
+      Repeat
+        FirstRead = ReadData(FirstFile, *FirstBuffer, 65536)
+        SecondRead = ReadData(SecondFile, *SecondBuffer, 65536)
+        If FirstRead <> SecondRead Or
+           (FirstRead > 0 And Not CompareMemory(*FirstBuffer, *SecondBuffer, FirstRead))
+          Result = #False
+          Break
+        EndIf
+      Until FirstRead = 0
+    EndIf
+  EndIf
+
+  If FirstFile
+    CloseFile(FirstFile)
+  EndIf
+  If SecondFile
+    CloseFile(SecondFile)
+  EndIf
+  If *FirstBuffer
+    FreeMemory(*FirstBuffer)
+  EndIf
+  If *SecondBuffer
+    FreeMemory(*SecondBuffer)
+  EndIf
+  ProcedureReturn Result
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Install the completed header through a sibling temporary file.
+; -----------------------------------------------------------------------------
+Procedure.i InstallGeneratedHeader(Destination.s)
+  Protected Temporary.s
+  Protected File.i
+  Protected Attempt.i
+
+  For Attempt = 0 To 99
+    CompilerIf #PB_Compiler_OS = #PB_OS_Windows
+      Temporary = Destination + ".pbhgen-" + Str(GetCurrentProcessId_()) +
+                  "-" + Str(ElapsedMilliseconds()) + "-" + Str(Attempt) + ".tmp"
+    CompilerElse
+      Temporary = Destination + ".pbhgen-" + Str(ElapsedMilliseconds()) +
+                  "-" + Str(Attempt) + ".tmp"
+    CompilerEndIf
+    If FileSize(Temporary) = -1
+      Break
+    EndIf
+  Next
+
+  File = CreateFile(#PB_Any, Temporary)
+  If Not File
+    SetDiagnostic(Program\SourceFileName$, 0, "IO003", "Unable to create temporary output file")
+    ProcedureReturn 3
+  EndIf
+  WriteString(File, GeneratedHeader)
+  CompilerIf #PB_Compiler_OS = #PB_OS_Windows
+    FlushFileBuffers_(FileID(File))
+  CompilerEndIf
+  CloseFile(File)
+
+  If FileSize(Destination) >= 0 And FilesIdentical(Temporary, Destination)
+    DeleteFile(Temporary, #PB_FileSystem_Force)
+    ProcedureReturn 0
+  EndIf
+
+  CompilerIf #PB_Compiler_OS = #PB_OS_Windows
+    If MoveFileEx_(Temporary, Destination, 1 | 8)
+      ProcedureReturn 0
+    EndIf
+  CompilerElse
+    If FileSize(Destination) = -1 And RenameFile(Temporary, Destination)
+      ProcedureReturn 0
+    EndIf
+  CompilerEndIf
+
+  DeleteFile(Temporary, #PB_FileSystem_Force)
+  SetDiagnostic(Program\SourceFileName$, 0, "IO004", "Unable to replace destination file atomically")
+  ProcedureReturn 3
 EndProcedure
 
 ; -----------------------------------------------------------------------------
@@ -687,6 +786,7 @@ Procedure.i GenerateSource(SourceFileName.s)
   Program\CurrentLineNumber = 0
   Program\CurrentState = #PBHGEN_STATE_GLOBAL
   Program\ModuleName$ = ""
+  GeneratedHeader = ""
   CodeLinesCount = 0
   ReDim CodeLines$(0)
   ReDim CodeLineNumbers(0)
@@ -741,12 +841,6 @@ Procedure.i GenerateSource(SourceFileName.s)
     ProcedureReturn 4
   EndIf
 
-  Program\HeaderFileHandle = CreateFile(#PB_Any, Program\HeaderFileName$)
-  If Not Program\HeaderFileHandle
-    SetDiagnostic(Program\SourceFileName$, 0, "IO003", "Unable to create destination file")
-    ProcedureReturn 3
-  EndIf
-
   WriteHeaderPrologue()
 
   For ParseIndex = 0 To CodeLinesCount - 1
@@ -760,9 +854,7 @@ Procedure.i GenerateSource(SourceFileName.s)
   Next
 
   WriteHeader("CompilerEndIf")
-  CloseFile(Program\HeaderFileHandle)
-  Program\HeaderFileHandle = 0
-  ProcedureReturn 0
+  ProcedureReturn InstallGeneratedHeader(Program\HeaderFileName$)
 EndProcedure
 
 ; -----------------------------------------------------------------------------
