@@ -56,6 +56,7 @@ Procedure.i Main()
   Protected CompileArguments.s
   Protected Result.ProcessResult
   Protected VersionResult.ProcessResult
+  Protected VersionText.s
 
   OpenConsole()
   Index = 0
@@ -131,7 +132,9 @@ Procedure.i Main()
     PrintN("Built executable did not pass its version check: " + Output)
     ProcedureReturn 3
   EndIf
-  PrintN("Built " + Trim(VersionResult\Output) + ": " + Output)
+  VersionText = ReplaceString(VersionResult\Output, #CR$, "")
+  VersionText = ReplaceString(VersionText, #LF$, "")
+  PrintN("Built " + Trim(VersionText) + ": " + Output)
   ProcedureReturn 0
 EndProcedure
 

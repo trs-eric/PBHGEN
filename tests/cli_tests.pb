@@ -352,6 +352,8 @@ Procedure TestReproducibleBuild()
   AssertTrue(RunBounded(Builder, Arguments, GetCurrentDirectory(), @Result),
              "second reproducible build completes")
   AssertTrue(Bool(Result\ExitCode = 0), "second reproducible build succeeds")
+  AssertTrue(Bool(FindString(Result\Output, #LF$ + ": ") = 0),
+             "build summary keeps the version and output path on one line")
 
   FirstHash = FileFingerprint(FirstOutput, #PB_Cipher_SHA2, 256)
   SecondHash = FileFingerprint(SecondOutput, #PB_Cipher_SHA2, 256)
