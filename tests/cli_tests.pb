@@ -32,7 +32,9 @@ Procedure.s ReadTextFile(Path.s)
   Protected File.i = ReadFile(#PB_Any, Path)
   Protected Text.s
   If File
-    Text = ReadString(File, #PB_File_IgnoreEOL)
+    While Not Eof(File)
+      Text + ReadString(File) + #LF$
+    Wend
     CloseFile(File)
   EndIf
   ProcedureReturn Text
@@ -117,6 +119,45 @@ Procedure TestMissingSourceStatus()
              "missing source returns filesystem exit code 3")
 EndProcedure
 
+Procedure TestRealProjectGolden()
+  Protected FixtureRoot.s = GetCurrentDirectory() + "tests" + #PS$ +
+                            "fixtures" + #PS$ + "real-project-regressions" + #PS$
+  Protected Source.s = TestRoot + "source.pb"
+  Protected Header.s = Source + "i"
+  Protected Result.ProcessResult
+
+  AssertTrue(CopyFile(FixtureRoot + "source.pb", Source),
+             "copy real-project source fixture")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "real-project fixture completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "real-project fixture succeeds")
+  AssertTrue(Bool(ReadTextFile(Header) = ReadTextFile(FixtureRoot + "expected.pbi")),
+             "real-project fixture matches its complete golden header")
+EndProcedure
+
+Procedure TestIncompleteSignatureDiagnostic()
+  Protected FixtureRoot.s = GetCurrentDirectory() + "tests" + #PS$ +
+                            "fixtures" + #PS$ + "incomplete-signature" + #PS$
+  Protected Source.s = TestRoot + "incomplete.pb"
+  Protected Header.s = Source + "i"
+  Protected Result.ProcessResult
+  Protected ExpectedDiagnostic.s
+
+  AssertTrue(CopyFile(FixtureRoot + "source.pb", Source),
+             "copy incomplete-signature source fixture")
+  AssertTrue(CopyFile(FixtureRoot + "expected.pbi", Header),
+             "create existing header sentinel")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "incomplete-signature invocation completes")
+  ExpectedDiagnostic = Source + "(2): error PARSE001: Incomplete procedure signature"
+  AssertTrue(Bool(Result\ExitCode = 4),
+             "incomplete signature returns parser exit code 4")
+  AssertTrue(Bool(FindString(Result\Output, ExpectedDiagnostic) > 0),
+             "incomplete signature reports exact source line and code")
+  AssertTrue(Bool(ReadTextFile(Header) = ReadTextFile(FixtureRoot + "expected.pbi")),
+             "parser failure preserves the existing header")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -141,6 +182,10 @@ Procedure Main()
   If CaseName = "" Or CaseName = "stage1"
     TestSynchronousSuccess()
     TestMissingSourceStatus()
+  EndIf
+  If CaseName = "" Or CaseName = "stage2"
+    TestRealProjectGolden()
+    TestIncompleteSignatureDiagnostic()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)

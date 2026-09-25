@@ -24,6 +24,14 @@ Structure ProgramData
 EndStructure
 Global Program.ProgramData
 
+Structure DiagnosticData
+  SourceFileName.s
+  LineNumber.i
+  Code.s
+  Message.s
+EndStructure
+Global LastDiagnostic.DiagnosticData
+
 Enumeration
   #PBHGEN_STATE_GLOBAL
   #PBHGEN_STATE_PROCEDURE
@@ -205,6 +213,7 @@ Procedure ExplodeCodeLine(Array Results$(1), Code$)
 EndProcedure
 
 Global Dim CodeLines$(0)
+Global Dim CodeLineNumbers.i(0)
 Global CodeLinesCount.l = 0
 
 ; -----------------------------------------------------------------------------
@@ -490,6 +499,85 @@ Procedure.s ParseModuleName(Line$)
 EndProcedure
 
 ; -----------------------------------------------------------------------------
+; Store and print one precise diagnostic for the current source.
+; -----------------------------------------------------------------------------
+Procedure SetDiagnostic(SourceFileName.s, LineNumber.i, Code.s, Message.s)
+  LastDiagnostic\SourceFileName = SourceFileName
+  LastDiagnostic\LineNumber = LineNumber
+  LastDiagnostic\Code = Code
+  LastDiagnostic\Message = Message
+  CompilerIf #PB_Compiler_Console
+    PrintN(SourceFileName + "(" + Str(LineNumber) + "): error " + Code + ": " + Message)
+  CompilerEndIf
+EndProcedure
+
+; -----------------------------------------------------------------------------
+; Validate procedure signatures before a destination file can be changed.
+; -----------------------------------------------------------------------------
+Procedure ValidateLogicalStatements()
+  Protected Index.i, LastIndex.i
+  Protected State.i = #PBHGEN_STATE_GLOBAL
+  Protected Signature.s, Declaration.s
+
+  For Index = 0 To CodeLinesCount - 1
+    Select State
+      Case #PBHGEN_STATE_GLOBAL, #PBHGEN_STATE_MODULE_GLOBAL
+        If IsBeginProcedure(CodeLines$(Index))
+          Signature = CollectProcedureSignature(Index, @LastIndex)
+          If Not IsProcedureSignatureComplete(Signature)
+            SetDiagnostic(Program\SourceFileName$, CodeLineNumbers(Index),
+                          "PARSE001", "Incomplete procedure signature")
+            ProcedureReturn #False
+          EndIf
+          Declaration = FilterArguments(ParseProcedure(Signature))
+          If Left(Declaration, 7) <> "Declare"
+            SetDiagnostic(Program\SourceFileName$, CodeLineNumbers(Index),
+                          "PARSE002", "Procedure declaration cannot be represented")
+            ProcedureReturn #False
+          EndIf
+          Index = LastIndex
+          If State = #PBHGEN_STATE_GLOBAL
+            State = #PBHGEN_STATE_PROCEDURE
+          Else
+            State = #PBHGEN_STATE_MODULE_PROCEDURE
+          EndIf
+        ElseIf IsBeginMacro(CodeLines$(Index))
+          If State = #PBHGEN_STATE_GLOBAL
+            State = #PBHGEN_STATE_MACRO
+          Else
+            State = #PBHGEN_STATE_MODULE_MACRO
+          EndIf
+        ElseIf State = #PBHGEN_STATE_GLOBAL And IsBeginModule(CodeLines$(Index))
+          State = #PBHGEN_STATE_MODULE_GLOBAL
+        ElseIf State = #PBHGEN_STATE_MODULE_GLOBAL And IsEndModule(CodeLines$(Index))
+          State = #PBHGEN_STATE_GLOBAL
+        EndIf
+
+      Case #PBHGEN_STATE_PROCEDURE
+        If IsEndProcedure(CodeLines$(Index))
+          State = #PBHGEN_STATE_GLOBAL
+        EndIf
+
+      Case #PBHGEN_STATE_MODULE_PROCEDURE
+        If IsEndProcedure(CodeLines$(Index))
+          State = #PBHGEN_STATE_MODULE_GLOBAL
+        EndIf
+
+      Case #PBHGEN_STATE_MACRO
+        If IsEndMacro(CodeLines$(Index))
+          State = #PBHGEN_STATE_GLOBAL
+        EndIf
+
+      Case #PBHGEN_STATE_MODULE_MACRO
+        If IsEndMacro(CodeLines$(Index))
+          State = #PBHGEN_STATE_MODULE_GLOBAL
+        EndIf
+    EndSelect
+  Next
+  ProcedureReturn #True
+EndProcedure
+
+; -----------------------------------------------------------------------------
 ; Parse the next line of the source file and output to the header file.
 ; -----------------------------------------------------------------------------
 Procedure ParseLine(Line$)
@@ -591,46 +679,45 @@ EndProcedure
 ; Generate one adjacent header and return a stable process exit code.
 ; -----------------------------------------------------------------------------
 Procedure.i GenerateSource(SourceFileName.s)
-  Protected i.i, ParseIndex.i, LastLineIndex.i
+  Protected i.i, ParseIndex.i, LastLineIndex.i, PhysicalLineNumber.i
   Protected CommentDetected.a
   Dim CodeChunks$(0)
 
   Program\SourceFileName$ = SourceFileName
+  Program\CurrentLineNumber = 0
+  Program\CurrentState = #PBHGEN_STATE_GLOBAL
+  Program\ModuleName$ = ""
+  CodeLinesCount = 0
+  ReDim CodeLines$(0)
+  ReDim CodeLineNumbers(0)
   Select LCase(GetExtensionPart(Program\SourceFileName$))
     Case "pb"
       Program\IsSpiderBasic = #False
     Case "sb"
       Program\IsSpiderBasic = #True
     Default
-      CompilerIf #PB_Compiler_Console
-        PrintN("PBHGEN: unsupported source path: " + Program\SourceFileName$)
-      CompilerEndIf
+      SetDiagnostic(Program\SourceFileName$, 0, "IO001", "Unsupported source extension")
       ProcedureReturn 3
   EndSelect
 
   Program\HeaderFileName$ = Program\SourceFileName$ + "i"
   Program\SourceFileHandle = ReadFile(#PB_Any, Program\SourceFileName$)
   If Not Program\SourceFileHandle
-    CompilerIf #PB_Compiler_Console
-      PrintN("PBHGEN: unable to read source: " + Program\SourceFileName$)
-    CompilerEndIf
-    ProcedureReturn 3
-  EndIf
-
-  Program\HeaderFileHandle = CreateFile(#PB_Any, Program\HeaderFileName$)
-  If Not Program\HeaderFileHandle
-    CloseFile(Program\SourceFileHandle)
+    SetDiagnostic(Program\SourceFileName$, 0, "IO002", "Unable to read source file")
     ProcedureReturn 3
   EndIf
 
   While Not Eof(Program\SourceFileHandle)
+    PhysicalLineNumber + 1
     Program\CurrentLine$ = ReadString(Program\SourceFileHandle)
     ExplodeCodeLine(CodeChunks$(), Program\CurrentLine$)
     CommentDetected = #False
 
     For i = 0 To ArraySize(CodeChunks$())
       ReDim CodeLines$(CodeLinesCount)
+      ReDim CodeLineNumbers(CodeLinesCount)
       CodeLines$(CodeLinesCount) = TrimStatement(CodeChunks$(i))
+      CodeLineNumbers(CodeLinesCount) = PhysicalLineNumber
 
       If LCase(Left(CodeLines$(CodeLinesCount), 8)) = "runtime "
         CodeLines$(CodeLinesCount) = Trim(Mid(CodeLines$(CodeLinesCount), 8))
@@ -649,6 +736,16 @@ Procedure.i GenerateSource(SourceFileName.s)
 
   CloseFile(Program\SourceFileHandle)
   Program\SourceFileHandle = 0
+
+  If Not ValidateLogicalStatements()
+    ProcedureReturn 4
+  EndIf
+
+  Program\HeaderFileHandle = CreateFile(#PB_Any, Program\HeaderFileName$)
+  If Not Program\HeaderFileHandle
+    SetDiagnostic(Program\SourceFileName$, 0, "IO003", "Unable to create destination file")
+    ProcedureReturn 3
+  EndIf
 
   For ParseIndex = 0 To CodeLinesCount - 1
     Program\CurrentLine$ = CodeLines$(ParseIndex)

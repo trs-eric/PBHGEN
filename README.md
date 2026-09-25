@@ -40,6 +40,15 @@ fully written and closed; file-access failures return exit code `3`. This makes
 it safe for an editor or build step to compile the source immediately after a
 successful PBHGEN process exit.
 
+When PBHGEN recognizes a procedure whose declaration cannot be generated
+safely, it returns exit code `4` and leaves an existing header unchanged.
+Console builds report the source path, physical line number, stable diagnostic
+code, and explanation, for example:
+
+```text
+source.pb(12): error PARSE001: Incomplete procedure signature
+```
+
 ### Remarks
 
 At the moment if you wish to have a procedure with structured List/Array/Map arguments, you will have to put that procedure above the code where you call it from. This does not apply when using basic types and is a limitation of PureBasic.
