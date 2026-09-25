@@ -158,6 +158,24 @@ Procedure TestIncompleteSignatureDiagnostic()
              "parser failure preserves the existing header")
 EndProcedure
 
+Procedure TestFirstLogicalStatement()
+  Protected FixtureRoot.s = GetCurrentDirectory() + "tests" + #PS$ +
+                            "fixtures" + #PS$ + "first-statement" + #PS$
+  Protected Source.s = TestRoot + "source.pb"
+  Protected Result.ProcessResult
+  Protected Actual.s, Expected.s
+
+  AssertTrue(CopyFile(FixtureRoot + "source.pb", Source),
+             "copy first-statement source fixture")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result),
+             "first-statement fixture completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "first-statement fixture succeeds")
+  Actual = ReadTextFile(Source + "i")
+  Expected = ReadTextFile(FixtureRoot + "expected.pbi")
+  AssertTrue(Bool(Actual = Expected),
+             "first logical procedure is preserved")
+EndProcedure
+
 Procedure Main()
   Protected CaseName.s
 
@@ -186,6 +204,9 @@ Procedure Main()
   If CaseName = "" Or CaseName = "stage2"
     TestRealProjectGolden()
     TestIncompleteSignatureDiagnostic()
+  EndIf
+  If CaseName = "" Or CaseName = "stage3"
+    TestFirstLogicalStatement()
   EndIf
 
   DeleteDirectory(TestRoot, "*", #PB_FileSystem_Recursive | #PB_FileSystem_Force)

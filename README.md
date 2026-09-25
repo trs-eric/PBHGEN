@@ -55,6 +55,9 @@ At the moment if you wish to have a procedure with structured List/Array/Map arg
 
 Procedure declarations may be indented with spaces or tabs. Multiline signatures are supported, including signatures with more than six parameters and default expressions containing nested parentheses.
 
+A procedure may be the first statement in a source file; PBHGEN does not
+consume that statement while creating the generated header prologue.
+
 Continued signatures may contain trailing comments, and quoted defaults may use PureBasic escaped-string syntax.
 
 Colons inside ordinary or escaped string literals and comments are preserved. Only unquoted colons split multiple statements on one physical line; module separators using `::` remain intact.
