@@ -10,6 +10,7 @@ repeatable evidence for this checkout.
 | Date | PureBasic compiler | Host | Architecture | Result |
 | --- | --- | --- | --- | --- |
 | 2026-09-24 | PureBasic 6.41 | Windows NT 10.0.26200 | x64 | Full CLI and golden suite passed; two clean builds were byte-identical |
+| 2026-10-23 | PureBasic 6.41 | Windows x64 | Structured collection compiler/execution regression, all 10 valid parser goldens, full CLI suite and two byte-identical clean builds passed |
 
 PureBasic 5.73 remains the historical source-compatibility target and the
 current PBHGEN public version name. It is not marked verified here because that
@@ -56,3 +57,5 @@ Stage 7 builds PBHGEN twice in an isolated test directory, compares SHA-256
 digests, and launches the result. Running `cli_tests.exe` with only the PBHGEN
 path executes the parser, output-safety, batch, and automation-option cases.
 Every process wait in the tracked harness has a finite timeout.
+
+For collection-specific compiler coverage, run `build/cli_tests.exe build/PBHGEN.exe collections C:/path/to/pbcompiler.exe`. The fixture also compiles directly from `tests/fixtures/typed-collections/compile.pb`.

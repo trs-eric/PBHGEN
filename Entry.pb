@@ -303,20 +303,8 @@ Procedure.s FilterArguments(Line$)
       If Not IsInString And NextChar = "("
         Skipping = #False
         If CheckDefaultType
-          Select LCase(FindDefaultType$)
-            Case ".b" : NewL$ + ".b"
-            Case ".a" : NewL$ + ".a"
-            Case ".c" : NewL$ + ".c"
-            Case ".w" : NewL$ + ".w"
-            Case ".u" : NewL$ + ".u"
-            Case ".c" : NewL$ + ".c"
-            Case ".l" : NewL$ + ".l"
-            Case ".i" : NewL$ + ".i"
-            Case ".f" : NewL$ + ".f"
-            Case ".q" : NewL$ + ".q"
-            Case ".d" : NewL$ + ".d"
-            Case ".s" : NewL$ + ".s"
-          EndSelect
+          ; Element types are part of collection signatures, including structures.
+          NewL$ + FindDefaultType$
           CheckDefaultType = #False
           FindDefaultType$ = ""
         EndIf

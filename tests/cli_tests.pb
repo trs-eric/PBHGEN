@@ -110,6 +110,25 @@ Procedure TestSynchronousSuccess()
              "header is complete when process exits")
 EndProcedure
 
+Procedure TestTypedCollections()
+  Protected FixtureRoot.s = GetCurrentDirectory() + "tests" + #PS$ + "fixtures" + #PS$ + "typed-collections" + #PS$
+  Protected Source.s = TestRoot + "source.pb", Header.s = Source + "i"
+  Protected Result.ProcessResult
+  AssertTrue(CopyFile(FixtureRoot + "source.pb", Source), "copy typed collections fixture")
+  AssertTrue(RunBounded(Generator, #DQUOTE$ + Source + #DQUOTE$, TestRoot, @Result), "typed collections generation completes")
+  AssertTrue(Bool(Result\ExitCode = 0), "typed collections generation succeeds")
+  AssertTrue(Bool(ReadTextFile(Header) = ReadTextFile(FixtureRoot + "expected.pbi")), "structured collections retain exact element types")
+  If CountProgramParameters() > 2
+    AssertTrue(WriteTextFile(TestRoot + "compile.pb", ReplaceString(ReadTextFile(FixtureRoot + "compile.pb"), "expected.pbi", "source.pbi")), "prepare generated-header compiler probe")
+    AssertTrue(RunBounded(ProgramParameter(2), #DQUOTE$ + TestRoot + "compile.pb" + #DQUOTE$ + " /EXE " + #DQUOTE$ + TestRoot + "compile.exe" + #DQUOTE$ + " /CONSOLE /THREAD", TestRoot, @Result), "compile generated collection declarations")
+    AssertTrue(Bool(Result\ExitCode = 0), "generated collection declarations compile")
+    If Result\ExitCode = 0
+      AssertTrue(RunBounded(TestRoot + "compile.exe", "", TestRoot, @Result), "execute generated collection declarations")
+      AssertTrue(Bool(Result\ExitCode = 0), "typed collection values survive procedure calls")
+    EndIf
+  EndIf
+EndProcedure
+
 Procedure TestMissingSourceStatus()
   Protected Result.ProcessResult
   Protected Missing.s = TestRoot + "missing.pb"
@@ -407,6 +426,9 @@ Procedure Main()
   EndIf
   If CaseName = "" Or CaseName = "stage6"
     TestAutomationOptions()
+  EndIf
+  If CaseName = "" Or CaseName = "collections"
+    TestTypedCollections()
   EndIf
   If CaseName = "stage7"
     TestReproducibleBuild()

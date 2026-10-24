@@ -103,7 +103,7 @@ replacement failure therefore cannot leave a truncated header behind.
 
 ### Remarks
 
-At the moment if you wish to have a procedure with structured List/Array/Map arguments, you will have to put that procedure above the code where you call it from. This does not apply when using basic types and is a limitation of PureBasic.
+Collection arguments retain their full element types in generated declarations, including structured and module-qualified `List`, `Array`, and `Map` parameters. Put the necessary structure definitions before the generated-header include so those types are visible to the compiler.
 
 Procedure declarations may be indented with spaces or tabs. Multiline signatures are supported, including signatures with more than six parameters and default expressions containing nested parentheses.
 
